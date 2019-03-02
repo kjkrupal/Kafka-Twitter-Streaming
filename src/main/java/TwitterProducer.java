@@ -8,6 +8,8 @@ import com.twitter.hbc.core.endpoint.StatusesFilterEndpoint;
 import com.twitter.hbc.core.processor.StringDelimitedProcessor;
 import com.twitter.hbc.httpclient.auth.Authentication;
 import com.twitter.hbc.httpclient.auth.OAuth1;
+import org.apache.kafka.clients.producer.*;
+import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.io.File;
 import java.util.List;
@@ -28,24 +30,38 @@ public class TwitterProducer {
 
         BlockingQueue<String> msgQueue = new LinkedBlockingQueue<String>(1000);
 
-        Client client = createTwitterClient(msgQueue);
+        final Client client = createTwitterClient(msgQueue);
 
         client.connect();
 
-        while(!client.isDone()){
+        KafkaProducer<String, String> producer = createKafkaProducer();
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+           client.stop();
+           producer.close();
+        }));
+
+        while(!client.isDone()) {
             String message = null;
 
             try {
                 message = msgQueue.poll(5, TimeUnit.SECONDS);
-            }
-            catch (Exception e) {
+            } catch (Exception e) {
                 client.stop();
             }
 
-            if(message != null) {
+            if (message != null) {
                 System.out.println(message);
+                producer.send(new ProducerRecord<String, String>("twitter_tweets", null, message), new Callback() {
+                    public void onCompletion(RecordMetadata recordMetadata, Exception e) {
+                        if (e != null) {
+                            System.out.println("Something wrong!! " + e);
+                        }
+                    }
+                });
             }
         }
+        System.out.println("Application done");
     }
 
     public Client createTwitterClient(BlockingQueue<String> msgQueue) {
@@ -74,6 +90,22 @@ public class TwitterProducer {
         Client hosebirdClient = builder.build();
 
         return hosebirdClient;
+    }
+
+    public KafkaProducer<String, String> createKafkaProducer(){
+
+        ResourceBundle resourceBundle = ResourceBundle.getBundle("kafka");
+
+        String bootstrapServers = resourceBundle.getString("bootstrap.servers");
+
+        Properties properties = new Properties();
+        properties.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        properties.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        properties.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(properties);
+
+        return producer;
     }
 
 }

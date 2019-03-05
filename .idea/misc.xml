@@ -5,6 +5,8 @@
     <option name="originalFiles">
       <list>
         <option value="$PROJECT_DIR$/pom.xml" />
+        <option value="$PROJECT_DIR$/Twitter-Producer/pom.xml" />
+        <option value="$PROJECT_DIR$/Elastic-Consumer/pom.xml" />
       </list>
     </option>
   </component>
